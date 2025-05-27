@@ -1,8 +1,11 @@
 use axum::{
-    Json as AxumJson, Router, extract::State, 
-    http::{StatusCode, HeaderMap, Request}, 
-    routing::post, middleware::{self, Next}, 
-    response::{Response, IntoResponse}, body::Body
+    Json as AxumJson, Router,
+    body::Body,
+    extract::State,
+    http::{HeaderMap, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::post,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, sync::Arc, time::Instant};
@@ -56,7 +59,7 @@ impl McpServerProcess {
         println!("[DEBUG] Serialized request: {}", request_json);
 
         // MCPサーバーには JSON.stringify された文字列を展開して送信
-        let mcp_message = &request.mcp;
+        let mcp_message = &request.command;
         println!("[DEBUG] Sending to MCP server: {}", mcp_message);
 
         // MCPサーバーに送信
@@ -118,7 +121,7 @@ impl McpServerProcess {
 // --- リクエスト・レスポンスデータ構造 ---
 #[derive(Serialize, Deserialize, Debug)]
 struct McpRequest {
-    mcp: String,
+    command: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -291,7 +294,10 @@ async fn bearer_auth_middleware(
 
     // APIキーを比較
     if provided_token != expected_api_key {
-        println!("[DEBUG] Invalid API key provided (length: {})", provided_token.len());
+        println!(
+            "[DEBUG] Invalid API key provided (length: {})",
+            provided_token.len()
+        );
         let error_response = AuthError {
             error: "Unauthorized".to_string(),
             message: "Invalid API key".to_string(),
@@ -332,21 +338,24 @@ fn create_auth_config() -> AuthConfig {
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
         .unwrap_or(false);
-    
+
     let enabled = !disable_auth && api_key.is_some();
-    
+
     if let Some(ref key) = api_key {
-        println!("[DEBUG] HTTP API Key configured (length: {} chars)", key.len());
+        println!(
+            "[DEBUG] HTTP API Key configured (length: {} chars)",
+            key.len()
+        );
     } else {
         println!("[DEBUG] No HTTP API Key configured (HTTP_API_KEY not set)");
     }
-    
+
     if disable_auth {
         println!("[DEBUG] Authentication disabled by DISABLE_AUTH=true");
     }
-    
+
     println!("[DEBUG] Authentication enabled: {}", enabled);
-    
+
     AuthConfig { api_key, enabled }
 }
 
@@ -387,7 +396,7 @@ async fn main() {
         };
 
     let app = Router::new()
-        .route("/api/mcp", post(handle_mcp_request_shared))
+        .route("/api/v1", post(handle_mcp_request_shared))
         .layer(middleware::from_fn_with_state(
             auth_config.clone(),
             bearer_auth_middleware,
@@ -401,10 +410,12 @@ async fn main() {
                 "[DEBUG] HTTP server listening on http://{}",
                 listener.local_addr().unwrap()
             );
-            println!("[DEBUG] Ready to accept requests at POST /api/mcp");
-            
+            println!("[DEBUG] Ready to accept requests at POST /api/v1");
+
             if auth_config.enabled {
-                println!("[DEBUG] Authentication is ENABLED - Authorization: Bearer <token> required");
+                println!(
+                    "[DEBUG] Authentication is ENABLED - Authorization: Bearer <token> required"
+                );
             } else {
                 println!("[DEBUG] Authentication is DISABLED - no authorization required");
             }
