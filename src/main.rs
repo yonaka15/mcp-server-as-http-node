@@ -1,16 +1,11 @@
-use axum::{
-    Json as AxumJson, // axum::Json と serde_json::Json を区別するため
-    Router,
-    extract::State,
-    http::StatusCode,
-    routing::post,
-};
+use axum::{Json as AxumJson, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, env, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc, time::Instant};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{ChildStdin, ChildStdout, Command},
     sync::Mutex,
+    time::{Duration, timeout},
 };
 
 // --- JSON設定ファイルの構造体 ---
@@ -28,39 +23,75 @@ type McpServersConfig = HashMap<String, McpProcessConfig>;
 struct McpServerProcess {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
-    // stderr_join_handle: Option<tokio::task::JoinHandle<()>>, // 必要であればstderr監視タスクのハンドルを保持
 }
 
 impl McpServerProcess {
     async fn query(&mut self, request: &McpRequest) -> Result<McpResponse, String> {
+        let start_time = Instant::now();
+        println!("[DEBUG] Starting MCP query at {:?}", start_time);
+        println!("[DEBUG] Request payload: {:?}", request);
+
         let request_json = serde_json::to_string(request)
             .map_err(|e| format!("Failed to serialize request: {}", e))?;
 
+        println!("[DEBUG] Serialized request: {}", request_json);
+
+        // MCPサーバーには JSON.stringify された文字列を展開して送信
+        let mcp_message = &request.mcp;
+        println!("[DEBUG] Sending to MCP server: {}", mcp_message);
+
+        // MCPサーバーに送信
         self.stdin
-            .write_all((request_json + "\n").as_bytes())
+            .write_all((mcp_message.to_string() + "\n").as_bytes())
             .await
             .map_err(|e| format!("Failed to write to MCP stdin: {}", e))?;
+
         self.stdin
             .flush()
             .await
             .map_err(|e| format!("Failed to flush MCP stdin: {}", e))?;
 
-        let mut response_line = String::new();
-        match self.stdout.read_line(&mut response_line).await {
-            Ok(0) => Err("MCP server closed the connection (EOF).".to_string()), // EOF
-            Ok(_) => {
-                if response_line.trim().is_empty() {
-                    return Err("MCP server returned an empty line.".to_string());
+        println!("[DEBUG] Data sent to MCP server, waiting for response...");
+
+        // タイムアウト付きでレスポンスを読み取り
+        let response_result = timeout(Duration::from_secs(30), async {
+            let mut response_line = String::new();
+            match self.stdout.read_line(&mut response_line).await {
+                Ok(0) => {
+                    println!("[DEBUG] MCP server closed connection (EOF)");
+                    Err("MCP server closed the connection (EOF).".to_string())
                 }
-                serde_json::from_str::<McpResponse>(&response_line).map_err(|e| {
-                    format!(
-                        "Failed to deserialize MCP response: {} (raw: '{}')",
-                        e,
-                        response_line.trim()
-                    )
-                })
+                Ok(bytes_read) => {
+                    println!("[DEBUG] Read {} bytes from MCP server", bytes_read);
+                    println!("[DEBUG] Raw response: '{}'", response_line.trim());
+
+                    if response_line.trim().is_empty() {
+                        return Err("MCP server returned an empty line.".to_string());
+                    }
+
+                    // レスポンスを文字列として返す（再度JSON化はしない）
+                    Ok(McpResponse {
+                        result: response_line.trim().to_string(),
+                    })
+                }
+                Err(e) => {
+                    println!("[DEBUG] Error reading from MCP stdout: {}", e);
+                    Err(format!("Failed to read from MCP stdout: {}", e))
+                }
             }
-            Err(e) => Err(format!("Failed to read from MCP stdout: {}", e)),
+        })
+        .await;
+
+        match response_result {
+            Ok(result) => {
+                let elapsed = start_time.elapsed();
+                println!("[DEBUG] MCP query completed in {:?}", elapsed);
+                result
+            }
+            Err(_) => {
+                println!("[DEBUG] MCP query timed out after 30 seconds");
+                Err("MCP server response timeout (30 seconds)".to_string())
+            }
         }
     }
 }
@@ -81,7 +112,8 @@ async fn start_mcp_server_from_config(
     config_file_path: &str,
     server_key: &str,
 ) -> Result<McpServerProcess, Box<dyn std::error::Error + Send + Sync>> {
-    // 1. JSON設定ファイルを読み込む
+    println!("[DEBUG] Reading config file: {}", config_file_path);
+
     let config_content = tokio::fs::read_to_string(config_file_path)
         .await
         .map_err(|e| {
@@ -91,6 +123,8 @@ async fn start_mcp_server_from_config(
             )
         })?;
 
+    println!("[DEBUG] Config content: {}", config_content);
+
     let all_configs: McpServersConfig = serde_json::from_str(&config_content).map_err(|e| {
         format!(
             "Failed to parse MCP config file '{}': {}",
@@ -98,7 +132,8 @@ async fn start_mcp_server_from_config(
         )
     })?;
 
-    // 2. 指定されたキーのコンフィグを取得
+    println!("[DEBUG] Parsed configs: {:?}", all_configs);
+
     let server_config = all_configs.get(server_key).ok_or_else(|| {
         format!(
             "MCP server configuration not found for key '{}' in file '{}'",
@@ -107,11 +142,10 @@ async fn start_mcp_server_from_config(
     })?;
 
     println!(
-        "Starting MCP server (key: '{}') with command: '{}', args: {:?}, env: {:?}",
+        "[DEBUG] Starting MCP server (key: '{}') with command: '{}', args: {:?}, env: {:?}",
         server_key, &server_config.command, &server_config.args, &server_config.env
     );
 
-    // 3. Commandを構築
     let mut command_builder = Command::new(&server_config.command);
     command_builder.args(&server_config.args);
     command_builder.envs(&server_config.env);
@@ -119,8 +153,9 @@ async fn start_mcp_server_from_config(
     command_builder
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped()); // 標準エラーもパイプする
+        .stderr(std::process::Stdio::piped());
 
+    println!("[DEBUG] Spawning MCP process...");
     let mut child = command_builder.spawn().map_err(|e| {
         format!(
             "Failed to spawn MCP process for key '{}' (command: '{}'): {}",
@@ -141,19 +176,23 @@ async fn start_mcp_server_from_config(
         .take()
         .ok_or_else(|| format!("Failed to open stderr for MCP process '{}'", server_key))?;
 
-    // MCPサーバーの標準エラー出力を非同期で読み取り、ログに出力するタスク
-    let server_key_clone_for_stderr = server_key.to_string(); // stderrタスク用にキーを複製
+    println!("[DEBUG] MCP process spawned successfully, setting up stderr monitoring...");
+
+    let server_key_clone_for_stderr = server_key.to_string();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stderr);
         let mut line = String::new();
         loop {
             match reader.read_line(&mut line).await {
                 Ok(0) => {
-                    // eprintln!("[MCP Server stderr - {}]: EOF, task finishing.", server_key_clone_for_stderr);
+                    println!(
+                        "[MCP Server stderr - {}]: EOF, task finishing.",
+                        server_key_clone_for_stderr
+                    );
                     break;
                 }
                 Ok(_) => {
-                    eprint!(
+                    print!(
                         "[MCP Server stderr - {}]: {}",
                         server_key_clone_for_stderr, line
                     );
@@ -170,28 +209,31 @@ async fn start_mcp_server_from_config(
         }
     });
 
+    println!("[DEBUG] MCP server setup complete");
+
     Ok(McpServerProcess {
         stdin,
         stdout: BufReader::new(stdout),
-        // stderr_join_handle: Some(stderr_task_handle),
     })
 }
 
 // --- Axum リクエストハンドラ ---
 async fn handle_mcp_request_shared(
     State(mcp_process_mutex): State<Arc<Mutex<McpServerProcess>>>,
-    AxumJson(payload): AxumJson<McpRequest>, // axum::Json を使用
+    AxumJson(payload): AxumJson<McpRequest>,
 ) -> Result<AxumJson<McpResponse>, StatusCode> {
-    // Mutexロックを取得して、McpServerProcessへの可変参照を得る
-    // このロックはスコープを抜けるまで保持される
+    println!("[DEBUG] Received HTTP request: {:?}", payload);
+
     let mut mcp_process_guard = mcp_process_mutex.lock().await;
+    println!("[DEBUG] Acquired MCP process mutex lock");
 
     match mcp_process_guard.query(&payload).await {
-        Ok(response) => Ok(AxumJson(response)),
+        Ok(response) => {
+            println!("[DEBUG] MCP query successful: {:?}", response);
+            Ok(AxumJson(response))
+        }
         Err(e) => {
-            eprintln!("Error querying MCP server: {}", e);
-            // ここでMCPプロセスが死んでいる可能性も考慮し、
-            // より高度なエラーリカバリ（プロセス再起動など）を検討することもできる
+            eprintln!("[ERROR] MCP query failed: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -200,58 +242,55 @@ async fn handle_mcp_request_shared(
 // --- main関数 ---
 #[tokio::main]
 async fn main() {
-    // 環境変数から設定ファイルパスと使用するMCPサーバーのキーを取得
+    println!("[DEBUG] Starting MCP HTTP server...");
+
     let config_file =
         env::var("MCP_CONFIG_FILE").unwrap_or_else(|_| "mcp_servers.config.json".to_string());
     let mcp_server_key_to_use =
-        env::var("MCP_SERVER_KEY").unwrap_or_else(|_| "brave-search".to_string()); // デフォルトのキー
+        env::var("MCP_SERVER_KEY").unwrap_or_else(|_| "brave-search".to_string());
 
     println!(
-        "Attempting to start MCP server using config: '{}' and key: '{}'",
+        "[DEBUG] Config file: '{}', Server key: '{}'",
         config_file, mcp_server_key_to_use
     );
 
-    // MCPサーバープロセスを起動
-    let mcp_server_process_mutex = match start_mcp_server_from_config(
-        &config_file,
-        &mcp_server_key_to_use,
-    )
-    .await
-    {
-        Ok(process) => Arc::new(Mutex::new(process)),
-        Err(e) => {
-            eprintln!(
-                "Fatal: Failed to start MCP server process from config: {}",
-                e
-            );
-            eprintln!(
-                "Please ensure the MCP server command and script paths are correct, and the script is executable."
-            );
-            eprintln!(
-                "For example, if using 'python3 ./test_mcp_server.py', ensure './test_mcp_server.py' exists and is executable by the user running this Axum server."
-            );
-            return;
-        }
-    };
+    let mcp_server_process_mutex =
+        match start_mcp_server_from_config(&config_file, &mcp_server_key_to_use).await {
+            Ok(process) => {
+                println!("[DEBUG] MCP server started successfully");
+                Arc::new(Mutex::new(process))
+            }
+            Err(e) => {
+                eprintln!("[FATAL] Failed to start MCP server process: {}", e);
+                eprintln!("Please ensure:");
+                eprintln!("1. Node.js is installed and npx is available");
+                eprintln!(
+                    "2. The @modelcontextprotocol/server-brave-search package can be downloaded"
+                );
+                eprintln!("3. Network connectivity is available");
+                return;
+            }
+        };
 
-    // Axumルーターの設定
     let app = Router::new()
         .route("/api/mcp", post(handle_mcp_request_shared))
-        .with_state(mcp_server_process_mutex); // MCPプロセスの通信チャネルをステートとして渡す
+        .with_state(mcp_server_process_mutex);
 
     let listener_addr = "127.0.0.1:3000";
     match tokio::net::TcpListener::bind(listener_addr).await {
         Ok(listener) => {
             println!(
-                "Axum server listening on http://{}",
+                "[DEBUG] HTTP server listening on http://{}",
                 listener.local_addr().unwrap()
             );
+            println!("[DEBUG] Ready to accept requests at POST /api/mcp");
+
             if let Err(e) = axum::serve(listener, app.into_make_service()).await {
-                eprintln!("Server error: {}", e);
+                eprintln!("[ERROR] Server error: {}", e);
             }
         }
         Err(e) => {
-            eprintln!("Failed to bind to address {}: {}", listener_addr, e);
+            eprintln!("[ERROR] Failed to bind to address {}: {}", listener_addr, e);
         }
     }
 }
