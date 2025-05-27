@@ -1,4 +1,9 @@
-use axum::{Json as AxumJson, Router, extract::State, http::StatusCode, routing::post};
+use axum::{
+    Json as AxumJson, Router, extract::State, 
+    http::{StatusCode, HeaderMap, Request}, 
+    routing::post, middleware::{self, Next}, 
+    response::{Response, IntoResponse}, body::Body
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, sync::Arc, time::Instant};
 use tokio::{
@@ -7,6 +12,20 @@ use tokio::{
     sync::Mutex,
     time::{Duration, timeout},
 };
+
+// --- 認証設定構造体 ---
+#[derive(Clone, Debug)]
+struct AuthConfig {
+    api_key: Option<String>,
+    enabled: bool,
+}
+
+// --- 認証エラーレスポンス構造体 ---
+#[derive(Serialize)]
+struct AuthError {
+    error: String,
+    message: String,
+}
 
 // --- JSON設定ファイルの構造体 ---
 #[derive(Deserialize, Debug, Clone)]
@@ -217,6 +236,73 @@ async fn start_mcp_server_from_config(
     })
 }
 
+// --- Bearer認証ミドルウェア ---
+async fn bearer_auth_middleware(
+    State(auth_config): State<AuthConfig>,
+    headers: HeaderMap,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, impl IntoResponse> {
+    // 認証が無効化されている場合はスキップ
+    if !auth_config.enabled {
+        return Ok(next.run(request).await);
+    }
+
+    // APIキーが設定されていない場合はスキップ
+    let expected_api_key = match &auth_config.api_key {
+        Some(key) => key,
+        None => return Ok(next.run(request).await),
+    };
+
+    // Authorizationヘッダーを取得
+    let auth_header = match headers.get("authorization") {
+        Some(header) => match header.to_str() {
+            Ok(header_str) => header_str,
+            Err(_) => {
+                println!("[DEBUG] Invalid Authorization header format");
+                let error_response = AuthError {
+                    error: "Unauthorized".to_string(),
+                    message: "Invalid Authorization header format".to_string(),
+                };
+                return Err((StatusCode::UNAUTHORIZED, AxumJson(error_response)));
+            }
+        },
+        None => {
+            println!("[DEBUG] Missing Authorization header");
+            let error_response = AuthError {
+                error: "Unauthorized".to_string(),
+                message: "Missing Authorization header".to_string(),
+            };
+            return Err((StatusCode::UNAUTHORIZED, AxumJson(error_response)));
+        }
+    };
+
+    // Bearer tokenを抽出
+    if !auth_header.starts_with("Bearer ") {
+        println!("[DEBUG] Authorization header does not start with 'Bearer '");
+        let error_response = AuthError {
+            error: "Unauthorized".to_string(),
+            message: "Authorization header must use Bearer token".to_string(),
+        };
+        return Err((StatusCode::UNAUTHORIZED, AxumJson(error_response)));
+    }
+
+    let provided_token = &auth_header[7..]; // "Bearer "の7文字をスキップ
+
+    // APIキーを比較
+    if provided_token != expected_api_key {
+        println!("[DEBUG] Invalid API key provided (length: {})", provided_token.len());
+        let error_response = AuthError {
+            error: "Unauthorized".to_string(),
+            message: "Invalid API key".to_string(),
+        };
+        return Err((StatusCode::UNAUTHORIZED, AxumJson(error_response)));
+    }
+
+    println!("[DEBUG] Authentication successful");
+    Ok(next.run(request).await)
+}
+
 // --- Axum リクエストハンドラ ---
 async fn handle_mcp_request_shared(
     State(mcp_process_mutex): State<Arc<Mutex<McpServerProcess>>>,
@@ -239,10 +325,38 @@ async fn handle_mcp_request_shared(
     }
 }
 
+// --- 認証設定を作成する関数 ---
+fn create_auth_config() -> AuthConfig {
+    let api_key = env::var("HTTP_API_KEY").ok();
+    let disable_auth = env::var("DISABLE_AUTH")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+    
+    let enabled = !disable_auth && api_key.is_some();
+    
+    if let Some(ref key) = api_key {
+        println!("[DEBUG] HTTP API Key configured (length: {} chars)", key.len());
+    } else {
+        println!("[DEBUG] No HTTP API Key configured (HTTP_API_KEY not set)");
+    }
+    
+    if disable_auth {
+        println!("[DEBUG] Authentication disabled by DISABLE_AUTH=true");
+    }
+    
+    println!("[DEBUG] Authentication enabled: {}", enabled);
+    
+    AuthConfig { api_key, enabled }
+}
+
 // --- main関数 ---
 #[tokio::main]
 async fn main() {
     println!("[DEBUG] Starting MCP HTTP server...");
+
+    // 認証設定を作成
+    let auth_config = create_auth_config();
 
     let config_file =
         env::var("MCP_CONFIG_FILE").unwrap_or_else(|_| "mcp_servers.config.json".to_string());
@@ -274,6 +388,10 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/mcp", post(handle_mcp_request_shared))
+        .layer(middleware::from_fn_with_state(
+            auth_config.clone(),
+            bearer_auth_middleware,
+        ))
         .with_state(mcp_server_process_mutex);
 
     let listener_addr = "127.0.0.1:3000";
@@ -284,6 +402,12 @@ async fn main() {
                 listener.local_addr().unwrap()
             );
             println!("[DEBUG] Ready to accept requests at POST /api/mcp");
+            
+            if auth_config.enabled {
+                println!("[DEBUG] Authentication is ENABLED - Authorization: Bearer <token> required");
+            } else {
+                println!("[DEBUG] Authentication is DISABLED - no authorization required");
+            }
 
             if let Err(e) = axum::serve(listener, app.into_make_service()).await {
                 eprintln!("[ERROR] Server error: {}", e);
