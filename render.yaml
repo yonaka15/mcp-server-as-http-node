@@ -3,4 +3,5 @@ services:
     name: mcp-server-as-http
     plan: free
     runtime: docker
-    dockerfilePath: ./deploy/web/Dockerfile
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
