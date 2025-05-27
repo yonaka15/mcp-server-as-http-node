@@ -72,9 +72,9 @@ ENV XDG_CONFIG_HOME=/app/.npm-config
 EXPOSE 3000
 
 # Set environment variables with defaults
-ENV MCP_CONFIG_FILE=mcp_servers.config.json
-ENV MCP_SERVER_KEY=brave-search
-ENV RUST_LOG=info
+# ENV MCP_CONFIG_FILE=mcp_servers.config.json
+# ENV MCP_SERVER_NAME=brave-search
+# ENV RUST_LOG=info
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -370,7 +370,7 @@ async fn main() {
     let config_file =
         env::var("MCP_CONFIG_FILE").unwrap_or_else(|_| "mcp_servers.config.json".to_string());
     let mcp_server_key_to_use =
-        env::var("MCP_SERVER_KEY").unwrap_or_else(|_| "brave-search".to_string());
+        env::var("MCP_SERVER_NAME").unwrap_or_else(|_| "brave-search".to_string());
 
     println!(
         "[DEBUG] Config file: '{}', Server key: '{}'",
@@ -403,13 +403,19 @@ async fn main() {
         ))
         .with_state(mcp_server_process_mutex);
 
-    let listener_addr = "127.0.0.1:3000";
-    match tokio::net::TcpListener::bind(listener_addr).await {
+    // Renderの要件に合わせてホストとポートを設定
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let listener_addr = format!("0.0.0.0:{}", port);
+
+    println!("[DEBUG] Attempting to bind to: {}", listener_addr);
+
+    match tokio::net::TcpListener::bind(&listener_addr).await {
         Ok(listener) => {
             println!(
                 "[DEBUG] HTTP server listening on http://{}",
-                listener.local_addr().unwrap()
+                listener.local_addr().unwrap() // ここでは実際のローカルアドレスを表示
             );
+            println!("[DEBUG] Render will forward requests to this port from the public internet.");
             println!("[DEBUG] Ready to accept requests at POST /api/v1");
 
             if auth_config.enabled {

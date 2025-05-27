@@ -6,3 +6,12 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: ./
     region: singapore
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DISABLE_AUTH
+        value: "false"
+      - key: MCP_CONFIG_FILE
+        value: mcp_servers.config.json
+      - key: MCP_SERVER_NAME
+        value: brave-search
