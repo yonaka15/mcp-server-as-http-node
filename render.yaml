@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: mcp-server-as-http
+    plan: free
+    runtime: image
+    dockerfilePath: ./deploy/web/Dockerfile
