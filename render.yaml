@@ -5,3 +5,4 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: ./
+    region: singapore
