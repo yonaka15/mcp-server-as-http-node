@@ -1,0 +1,56 @@
+services:
+  mcp-server-as-http:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Override default environment variables here
+      - HTTP_API_KEY=${HTTP_API_KEY:-your-secret-api-key-here}
+      - DISABLE_AUTH=${DISABLE_AUTH:-false}
+      - MCP_CONFIG_FILE=mcp_servers.config.json
+      - MCP_SERVER_KEY=${MCP_SERVER_KEY:-brave-search}
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      # Mount config file for easy development changes
+      - ./mcp_servers.config.json:/app/mcp_servers.config.json:ro
+      # Optional: mount custom .env file
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:3000/api/v1",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "-d",
+          '{"command":"test"}',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Add a simple health check service
+  health-check:
+    image: curlimages/curl:latest
+    depends_on:
+      - mcp-http-server
+    command: >
+      sh -c "
+        echo 'Waiting for mcp-http-server to be ready...' &&
+        sleep 10 &&
+        curl -f http://mcp-http-server:3000/api/v1 
+          -X POST 
+          -H 'Content-Type: application/json' 
+          -d '{\"command\":\"test\"}' &&
+        echo 'Health check passed!'
+      "
+    profiles:
+      - health-check
