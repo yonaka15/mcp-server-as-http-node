@@ -37,9 +37,84 @@ struct McpProcessConfig {
     args: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
+    #[serde(default)]
+    repository: Option<String>,
+    #[serde(default)]
+    build_command: Option<String>,
 }
 
 type McpServersConfig = HashMap<String, McpProcessConfig>;
+
+// --- GitHub repository clone function ---
+async fn clone_and_build_repository(
+    config: &McpProcessConfig,
+    work_dir: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let repo_url = config.repository.as_ref().ok_or("Repository is None")?;
+    
+    println!("[DEBUG] Cloning repository: {}", repo_url);
+    
+    // Extract repository name
+    let repo_name = repo_url
+        .split('/')
+        .last()
+        .ok_or("Invalid repository URL")?;
+    
+    let clone_path = format!("{}/{}", work_dir, repo_name);
+    
+    // Remove existing directory if it exists
+    if tokio::fs::metadata(&clone_path).await.is_ok() {
+        println!("[DEBUG] Removing existing directory: {}", clone_path);
+        tokio::fs::remove_dir_all(&clone_path).await.map_err(|e| {
+            format!("Failed to remove existing directory: {}", e)
+        })?;
+    }
+    
+    // Execute git clone
+    let clone_output = Command::new("git")
+        .args(["clone", repo_url, &clone_path])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute git clone command: {}", e))?;
+    
+    if !clone_output.status.success() {
+        let error_msg = String::from_utf8_lossy(&clone_output.stderr);
+        return Err(format!("Git clone failed: {}", error_msg).into());
+    }
+    
+    println!("[DEBUG] Repository cloned to: {}", clone_path);
+    
+    // Execute build command if specified
+    if let Some(build_cmd) = &config.build_command {
+        println!("[DEBUG] Executing build command: {}", build_cmd);
+        
+        let mut build_command = Command::new("sh");
+        build_command.args(["-c", build_cmd]);
+        build_command.current_dir(&clone_path);
+        
+        // Add environment variables from config file
+        build_command.envs(&config.env);
+        
+        // Inherit parent environment variables (from Docker container)
+        for (key, value) in std::env::vars() {
+            build_command.env(key, value);
+        }
+        
+        let build_output = build_command
+            .output()
+            .await
+            .map_err(|e| format!("Failed to execute build command: {}", e))?;
+        
+        if !build_output.status.success() {
+            let error_msg = String::from_utf8_lossy(&build_output.stderr);
+            return Err(format!("Build failed: {}", error_msg).into());
+        }
+        
+        println!("[DEBUG] Build completed successfully");
+    }
+    
+    Ok(clone_path)
+}
 
 // --- MCPプロセスとの通信用構造体 ---
 struct McpServerProcess {
@@ -163,14 +238,39 @@ async fn start_mcp_server_from_config(
         )
     })?;
 
+    // Handle GitHub repository if specified
+    let mut working_directory = std::env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?
+        .to_string_lossy()
+        .to_string();
+    
+    if server_config.repository.is_some() {
+        println!("[DEBUG] Repository specified, cloning and building...");
+        // Create work directory
+        tokio::fs::create_dir_all("/tmp/mcp-servers")
+            .await
+            .map_err(|e| format!("Failed to create work directory: {}", e))?;
+        working_directory = clone_and_build_repository(server_config, "/tmp/mcp-servers").await?;
+    }
+
     println!(
-        "[DEBUG] Starting MCP server (key: '{}') with command: '{}', args: {:?}, env: {:?}",
-        server_key, &server_config.command, &server_config.args, &server_config.env
+        "[DEBUG] Starting MCP server (key: '{}') with command: '{}', args: {:?}, env: {:?}, working_dir: '{}'",
+        server_key, &server_config.command, &server_config.args, &server_config.env, working_directory
     );
 
     let mut command_builder = Command::new(&server_config.command);
     command_builder.args(&server_config.args);
+    
+    // Add environment variables from config file
     command_builder.envs(&server_config.env);
+    
+    // Inherit parent environment variables (from Docker container)
+    // This allows Docker environment variables to be passed to the MCP server
+    for (key, value) in env::vars() {
+        command_builder.env(key, value);
+    }
+    
+    command_builder.current_dir(&working_directory);
 
     command_builder
         .stdin(std::process::Stdio::piped())
@@ -370,7 +470,7 @@ async fn main() {
     let config_file =
         env::var("MCP_CONFIG_FILE").unwrap_or_else(|_| "mcp_servers.config.json".to_string());
     let mcp_server_key_to_use =
-        env::var("MCP_SERVER_NAME").unwrap_or_else(|_| "brave-search".to_string());
+        env::var("MCP_SERVER_NAME").unwrap_or_else(|_| "redmine".to_string());
 
     println!(
         "[DEBUG] Config file: '{}', Server key: '{}'",
@@ -386,11 +486,10 @@ async fn main() {
             Err(e) => {
                 eprintln!("[FATAL] Failed to start MCP server process: {}", e);
                 eprintln!("Please ensure:");
-                eprintln!("1. Node.js is installed and npx is available");
-                eprintln!(
-                    "2. The @modelcontextprotocol/server-brave-search package can be downloaded"
-                );
+                eprintln!("1. Node.js is installed and required tools are available");
+                eprintln!("2. Git is installed for repository cloning");
                 eprintln!("3. Network connectivity is available");
+                eprintln!("4. The specified MCP server repository is accessible");
                 return;
             }
         };

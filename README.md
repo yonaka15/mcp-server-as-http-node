@@ -74,7 +74,7 @@ DISABLE_AUTH=false
 
 # MCP Server Configuration
 MCP_CONFIG_FILE=mcp_servers.config.json
-MCP_SERVER_KEY=brave-search
+MCP_SERVER_NAME=redmine
 ```
 
 ### MCP Server Configuration
@@ -83,6 +83,16 @@ Edit `mcp_servers.config.json` to configure MCP servers:
 
 ```json
 {
+  "redmine": {
+    "repository": "https://github.com/yonaka15/mcp-server-redmine",
+    "build_command": "npm install && npm run build",
+    "command": "node",
+    "args": ["dist/index.js"],
+    "env": {
+      "REDMINE_URL": "https://your-redmine.example.com",
+      "REDMINE_API_KEY": "your-api-key"
+    }
+  },
   "brave-search": {
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"]
@@ -129,8 +139,8 @@ curl -X POST http://localhost:3000/api/v1 \
 # Install Rust (if not already installed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Node.js dependencies globally (for MCP servers)
-npm install -g @modelcontextprotocol/server-brave-search
+# Install Git for repository cloning
+# Node.js dependencies will be automatically installed during build
 
 # Build and run
 cargo build --release

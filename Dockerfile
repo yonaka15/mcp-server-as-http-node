@@ -2,11 +2,12 @@
 # Stage 1: Build stage with Rust and Node.js
 FROM rust:1.85-slim-bookworm as builder
 
-# Install Node.js and build dependencies
+# Install Node.js, Git and build dependencies
 RUN apt-get update && apt-get install -y \
   pkg-config \
   libssl-dev \
   curl \
+  git \
   && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
@@ -36,6 +37,7 @@ FROM node:18-slim
 RUN apt-get update && apt-get install -y \
   ca-certificates \
   curl \
+  git \
   && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
