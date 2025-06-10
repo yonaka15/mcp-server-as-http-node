@@ -8,5 +8,11 @@
   "brave-search": {
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+  },
+  "moz-readability": {
+    "repository": "https://github.com/emzimmer/server-moz-readability.git",
+    "build_command": "npm install",
+    "command": "node",
+    "args": ["dist/index.js"]
   }
 }
