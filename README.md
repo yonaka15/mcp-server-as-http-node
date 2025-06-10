@@ -2,6 +2,14 @@
 
 A HTTP server that provides a REST API interface to Model Context Protocol (MCP) servers.
 
+> **⚠️ IMPORTANT NOTE**: This repository contains a general-purpose implementation that works with various MCP servers via `npx` commands. For production use and better performance, we recommend using language-specific repositories:
+>
+> - **Node.js/TypeScript MCP servers**: Use `mcp-server-as-http-node` (planned)
+> - **Python MCP servers**: Use `mcp-server-as-http-python` (planned)
+> - **Docker-based MCP servers**: Use `mcp-server-as-http-docker` (planned)
+>
+> Each specialized repository provides optimized Docker images, better dependency management, and improved performance for specific MCP server types.
+
 ## Features
 
 - **REST API Interface**: Convert MCP protocol to HTTP REST API
@@ -206,6 +214,79 @@ export RUST_LOG=debug
 
 # Or in .env file
 RUST_LOG=debug
+```
+
+## Repository Strategy
+
+### Current Repository (`mcp-server-as-http`)
+
+This repository serves as:
+- **Proof of Concept**: Demonstrates HTTP-to-MCP protocol conversion
+- **General Purpose Tool**: Works with any MCP server accessible via `npx`
+- **Development Base**: Foundation for specialized implementations
+
+### Planned Specialized Repositories
+
+For production use, we're developing language-specific repositories with optimized Docker images:
+
+#### 1. `mcp-server-as-http-node` (Node.js/TypeScript)
+- **Base Image**: `node:18-alpine`
+- **Features**: 
+  - Direct GitHub repository cloning and building
+  - Optimized for npm/yarn-based MCP servers
+  - TypeScript compilation support
+  - Node.js-specific optimizations
+- **Use Cases**: Most MCP servers from @modelcontextprotocol org
+
+#### 2. `mcp-server-as-http-python` (Python)
+- **Base Image**: `python:3.11-alpine`
+- **Features**:
+  - Poetry/pip dependency management
+  - Python virtual environment isolation
+  - Support for Python-based MCP servers
+  - Optimized Python runtime
+- **Use Cases**: Python-based MCP servers and custom implementations
+
+#### 3. `mcp-server-as-http-docker` (Docker-in-Docker)
+- **Base Image**: `docker:dind`
+- **Features**:
+  - Run MCP servers that require Docker
+  - Full containerization support
+  - Multi-service orchestration
+  - Advanced networking capabilities
+- **Use Cases**: Complex MCP servers requiring isolated environments
+
+### Migration Strategy
+
+1. **Current Phase**: Use this repository for development and testing
+2. **Production Phase**: Migrate to appropriate specialized repository
+3. **Configuration**: Same JSON configuration format across all repositories
+4. **API Compatibility**: Identical REST API interface
+
+### Benefits of Repository Separation
+
+- **Optimized Images**: Smaller, faster Docker images with only necessary dependencies
+- **Better Performance**: Language-specific optimizations and caching
+- **Simplified Maintenance**: Focused codebase per language ecosystem
+- **Security**: Minimal attack surface with language-specific base images
+- **CI/CD Efficiency**: Faster builds and testing cycles
+
+### Configuration Compatibility
+
+All repositories will support the same configuration format:
+
+```json
+{
+  "server-name": {
+    "repository": "https://github.com/org/mcp-server",
+    "build_command": "npm install && npm run build",
+    "command": "node",
+    "args": ["dist/index.js"],
+    "env": {
+      "CUSTOM_VAR": "value"
+    }
+  }
+}
 ```
 
 ## License

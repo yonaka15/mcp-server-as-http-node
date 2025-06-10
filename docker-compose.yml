@@ -12,6 +12,7 @@ services:
       - MCP_CONFIG_FILE=mcp_servers.config.json
       - MCP_SERVER_NAME=${MCP_SERVER_NAME:-brave-search}
       - RUST_LOG=${RUST_LOG:-info}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
     volumes:
       # Mount config file for easy development changes
       - ./mcp_servers.config.json:/app/mcp_servers.config.json:ro
