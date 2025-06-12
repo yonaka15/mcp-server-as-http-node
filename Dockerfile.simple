@@ -1,0 +1,65 @@
+# MCP HTTP Server (Node.js Runtime) - Simple Fallback Build
+# Minimal dependencies, maximum compatibility
+
+FROM node:18-alpine
+
+# Install essentials only
+RUN apk add --no-cache \
+    curl \
+    git \
+    ca-certificates \
+    wget
+
+# Try multiple approaches to get the binary
+WORKDIR /app
+
+# Method 1: Try to download pre-built binary (if available)
+# Method 2: Build from source as fallback
+RUN set -e; \
+    # Attempt 1: Download pre-built (uncomment when releases are available)
+    # wget -q https://github.com/yonaka15/mcp-server-as-http-core/releases/latest/download/mcp-server-as-http-core-$(uname -m) -O mcp-http-server || \
+    # Attempt 2: Simple build from source
+    ( \
+        echo "Building from source..." && \
+        apk add --no-cache --virtual .build-deps \
+            rust \
+            cargo \
+            musl-dev \
+            openssl-dev \
+            pkgconfig && \
+        git clone --depth 1 https://github.com/yonaka15/mcp-server-as-http-core.git /tmp/core && \
+        cd /tmp/core && \
+        cargo build --release && \
+        cp target/release/mcp-server-as-http-core /app/mcp-http-server && \
+        cd /app && \
+        rm -rf /tmp/core && \
+        apk del .build-deps \
+    ) && \
+    chmod +x mcp-http-server
+
+# Create user
+RUN addgroup -g 1001 -S mcpuser && \
+    adduser -S mcpuser -u 1001 -G mcpuser
+
+# Copy configuration
+COPY mcp_servers.config.json .env.example ./
+
+# Setup directories
+RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
+    chown -R mcpuser:mcpuser /app /tmp/mcp-servers
+
+USER mcpuser
+
+# Environment
+ENV MCP_CONFIG_FILE=mcp_servers.config.json \
+    MCP_SERVER_NAME=brave-search \
+    MCP_RUNTIME_TYPE=node \
+    WORK_DIR=/tmp/mcp-servers \
+    RUST_LOG=info
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+CMD ["./mcp-http-server"]
