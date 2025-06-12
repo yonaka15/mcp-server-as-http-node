@@ -1,88 +1,86 @@
-# Multi-stage build for mcp-http-server
+# Multi-stage Docker build for MCP HTTP Server (Node.js Runtime)
+# Optimized for Node.js/TypeScript MCP servers
+
 # Stage 1: Build stage with Rust and Node.js
 FROM rust:1.85-slim-bookworm as builder
 
-# Install Node.js, Git and build dependencies
+# Install dependencies
 RUN apt-get update && apt-get install -y \
-  pkg-config \
-  libssl-dev \
-  curl \
-  git \
-  && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-  && apt-get install -y nodejs \
-  && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    libssl-dev \
+    curl \
+    git \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy Cargo files for dependency caching
+# Copy project files including git submodules
+COPY . .
+
+# Initialize git submodules
+RUN git submodule update --init --recursive || echo "No submodules or git not available"
+
+# Build dependencies first (for caching)
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release
+RUN rm -rf src target/release/deps/mcp_http_server_node*
 
-# Create a dummy main.rs to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# Build dependencies (this layer will be cached)
-RUN cargo build --release && rm -rf src target/release/deps/mcp*
-
-# Copy source code
+# Build the actual application
 COPY src ./src
-
-# Build the application
 RUN cargo build --release
 
-# Stage 2: Runtime stage
+# Stage 2: Runtime stage optimized for Node.js
 FROM node:18-slim
 
-# Install only runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-  ca-certificates \
-  curl \
-  git \
-  && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
+# Create non-root user
 RUN groupadd -r mcpuser && useradd -r -g mcpuser mcpuser
 
-# Set working directory
 WORKDIR /app
 
-# Copy the binary from builder stage
-COPY --from=builder /app/target/release/mcp-http-server .
+# Copy binary from builder
+COPY --from=builder /app/target/release/mcp-http-server-node ./mcp-http-server
 
 # Copy configuration files
-COPY mcp_servers.config.json .
-COPY .env.example .env
+COPY mcp_servers.config.json .env.example ./
 
-# npm/npxが使用するキャッシュディレクトリと設定ディレクトリを/app配下に作成
-# これらのディレクトリの所有権をmcpuserに変更
-RUN mkdir -p /app/.npm-cache /app/.npm-config && \
-  chown -R mcpuser:mcpuser /app/.npm-cache /app/.npm-config
-
-# アプリケーションの他のファイルもmcpuser所有にする
-# (この行は既に存在しますが、新しいディレクトリ作成後に効果があるように配置を確認)
-RUN chown -R mcpuser:mcpuser /app
+# Setup npm cache and config directories
+RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
+    chown -R mcpuser:mcpuser /app /tmp/mcp-servers
 
 # Switch to non-root user
 USER mcpuser
 
-# npm/npxがこれらのディレクトリを使用するように環境変数を設定
+# Configure npm to use app-local directories
 ENV NPM_CONFIG_CACHE=/app/.npm-cache
-# XDG_CONFIG_HOMEは、npxが内部で利用する設定ファイルのパスのヒントになることがあります
 ENV XDG_CONFIG_HOME=/app/.npm-config
 
 # Expose port
 EXPOSE 3000
 
-# Set environment variables with defaults
-# ENV MCP_CONFIG_FILE=mcp_servers.config.json
-# ENV MCP_SERVER_NAME=brave-search
-# ENV RUST_LOG=info
+# Environment variables for Node.js optimization
+ENV MCP_CONFIG_FILE=mcp_servers.config.json
+ENV MCP_SERVER_NAME=redmine
+ENV NODE_PACKAGE_MANAGER=npm
+ENV ENABLE_TYPESCRIPT=true
+ENV AUTO_INSTALL_DEPS=true
+ENV WORK_DIR=/tmp/mcp-servers
+ENV RUST_LOG=info
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/v1 -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}' || exit 1
+    CMD curl -f http://localhost:3000/api/v1 -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}' || exit 1
 
 # Run the application
 CMD ["./mcp-http-server"]

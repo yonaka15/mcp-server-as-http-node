@@ -1,85 +1,79 @@
-# MCP HTTP Server
+# MCP HTTP Server - Node.js Runtime
 
-A HTTP server that provides a REST API interface to Model Context Protocol (MCP) servers.
+A specialized HTTP server for Node.js/TypeScript Model Context Protocol (MCP) servers, built on top of `mcp-server-as-http-core`.
 
-> **⚠️ IMPORTANT NOTE**: This repository contains a general-purpose implementation that works with various MCP servers via `npx` commands. For production use and better performance, we recommend using language-specific repositories:
->
-> - **Node.js/TypeScript MCP servers**: Use `mcp-server-as-http-node` (planned)
-> - **Python MCP servers**: Use `mcp-server-as-http-python` (planned)
-> - **Docker-based MCP servers**: Use `mcp-server-as-http-docker` (planned)
->
-> Each specialized repository provides optimized Docker images, better dependency management, and improved performance for specific MCP server types.
+> **🎯 Node.js Optimized**: This implementation is specifically optimized for Node.js and TypeScript MCP servers with automatic dependency management, TypeScript compilation, and npm/yarn/pnpm support.
 
-## Features
+## 🚀 Features
 
-- **REST API Interface**: Convert MCP protocol to HTTP REST API
+- **Node.js Native**: Optimized for Node.js/TypeScript MCP servers
+- **Automatic Setup**: Automatic npm install, TypeScript compilation
+- **Multi Package Manager**: Support for npm, yarn, and pnpm
+- **Docker First**: Containerized deployment with multi-stage builds
+- **Git Integration**: Automatic repository cloning and building
 - **Authentication**: Bearer token authentication support
-- **Configuration**: JSON-based MCP server configuration
-- **Docker Support**: Full Docker containerization with multi-stage builds
-- **Health Checks**: Built-in health checking capabilities
-- **Logging**: Comprehensive debug logging
+- **Health Checks**: Built-in health monitoring
 
-## Quick Start with Docker
+## 📦 Quick Start with Docker
 
-### 1. Build and Run (Recommended)
+### 1. Using Docker Compose (Recommended)
 
 ```bash
-# Make the build script executable
-chmod +x docker-build.sh
+# Copy environment configuration
+cp .env.example .env
 
-# Build and start the container
-./docker-build.sh
+# Edit your configuration
+vim .env
 
-# Or with custom options
-./docker-build.sh --port 8080 --tag v1.0.0
-```
-
-### 2. Using Docker Compose
-
-```bash
 # Start the service
 docker-compose up -d
 
 # View logs
-docker-compose logs -f
+docker-compose logs -f mcp-http-server-node
+```
 
-# Stop the service
-docker-compose down
+### 2. Using Docker Build Script
+
+```bash
+# Build and run
+chmod +x docker-build.sh
+./docker-build.sh --port 3000 --tag node-v1.0.0
 ```
 
 ### 3. Manual Docker Commands
 
 ```bash
 # Build the image
-docker build -t mcp-http-server .
+docker build -t mcp-http-server-node .
 
 # Run the container
 docker run -d \
-  --name mcp-http-server \
+  --name mcp-http-server-node \
   -p 3000:3000 \
   --env-file .env \
-  mcp-http-server
+  mcp-http-server-node
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 ### Environment Variables
 
-Create a `.env` file (copy from `.env.example`):
-
-```bash
-# HTTP Server Authentication
-HTTP_API_KEY=your-secret-api-key-here
-DISABLE_AUTH=false
-
-# MCP Server Configuration
-MCP_CONFIG_FILE=mcp_servers.config.json
-MCP_SERVER_NAME=redmine
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_CONFIG_FILE` | `mcp_servers.config.json` | Path to MCP servers configuration |
+| `MCP_SERVER_NAME` | `redmine` | Server name to use from config |
+| `PORT` | `3000` | HTTP server port |
+| `HOST` | `0.0.0.0` | HTTP server host |
+| `HTTP_API_KEY` | - | Bearer token for authentication |
+| `DISABLE_AUTH` | `false` | Disable authentication |
+| `NODE_PACKAGE_MANAGER` | `npm` | Package manager (npm/yarn/pnpm) |
+| `ENABLE_TYPESCRIPT` | `true` | Enable TypeScript support |
+| `AUTO_INSTALL_DEPS` | `true` | Auto install dependencies |
+| `WORK_DIR` | `/tmp/mcp-servers` | Working directory for repositories |
 
 ### MCP Server Configuration
 
-Edit `mcp_servers.config.json` to configure MCP servers:
+Create `mcp_servers.config.json`:
 
 ```json
 {
@@ -93,14 +87,17 @@ Edit `mcp_servers.config.json` to configure MCP servers:
       "REDMINE_API_KEY": "your-api-key"
     }
   },
-  "brave-search": {
+  "github": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token"
+    }
   }
 }
 ```
 
-## API Usage
+## 🛠️ API Usage
 
 ### Authentication
 
@@ -110,195 +107,109 @@ Include Bearer token in Authorization header:
 curl -X POST http://localhost:3000/api/v1 \
   -H "Authorization: Bearer your-secret-api-key-here" \
   -H "Content-Type: application/json" \
-  -d '{"command": "your-mcp-command"}'
-```
-
-Example for `tools/list`:
-```bash
- curl -X POST http://localhost:3000/api/v1 \
-  -H "Authorization: Bearer your-secret-api-key-here" \
-  -H "Content-Type: application/json" \
   -d '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}'
 ```
 
 ### Without Authentication
 
-Set `DISABLE_AUTH=true` in your `.env` file:
+Set `DISABLE_AUTH=true`:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1 \
   -H "Content-Type: application/json" \
-  -d '{"command": "your-mcp-command"}'
+  -d '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}'
 ```
 
-## Development
+## 🏗️ Architecture
 
-### Local Development
+### Core Components
 
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- **mcp-server-as-http-core**: Core library (git submodule)
+- **Node.js Runtime**: Specialized Node.js/TypeScript support
+- **Docker Container**: Multi-stage build with Node.js 18
+- **Authentication**: Bearer token middleware
+- **Process Management**: Async MCP server communication
 
-# Install Git for repository cloning
-# Node.js dependencies will be automatically installed during build
+### Node.js Optimizations
 
-# Build and run
-cargo build --release
-./target/release/mcp-http-server
-```
+- **Automatic TypeScript Detection**: Compiles TypeScript projects automatically
+- **Package Manager Support**: Works with npm, yarn, and pnpm
+- **Dependency Auto-Install**: Automatically runs `npm install` for repositories
+- **Version Checking**: Validates Node.js version compatibility
+- **npm Cache**: Optimized npm caching in Docker
 
-### Docker Development
-
-```bash
-# Build only (no run)
-./docker-build.sh --build-only
-
-# Build without cache
-./docker-build.sh --no-cache
-
-# Custom port
-./docker-build.sh --port 8080
-```
-
-## Architecture
-
-### Multi-stage Docker Build
-
-- **Stage 1 (Builder)**: Rust + Node.js environment for building
-- **Stage 2 (Runtime)**: Minimal Node.js runtime with compiled binary
-
-### Security Features
-
-- Non-root user execution
-- Minimal runtime dependencies
-- Optional Bearer token authentication
-- Health check endpoints
-
-### Dependencies
-
-- **Runtime**: Node.js (for npx and MCP servers)
-- **Build**: Rust toolchain
-- **MCP Servers**: Various npm packages (installed dynamically)
-
-## Monitoring
+## 📊 Monitoring
 
 ### Health Check
 
 ```bash
-# Check container health
+# Container health status
 docker ps
 
 # Manual health check
 curl -f http://localhost:3000/api/v1 \
   -X POST \
   -H "Content-Type: application/json" \
-  -d '{"command":"test"}'
+  -d '{"command":"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"}'
 ```
 
 ### Logs
 
 ```bash
-# Docker logs
-docker logs -f mcp-http-server
-
 # Docker Compose logs
-docker-compose logs -f
+docker-compose logs -f mcp-http-server-node
+
+# Docker logs
+docker logs -f mcp-http-server-node
 ```
 
-## Troubleshooting
+## 🔧 Development
 
-### Common Issues
-
-1. **Node.js/npx not found**: Ensure Node.js is installed in the container
-2. **MCP server startup failure**: Check network connectivity for npm package downloads
-3. **Permission denied**: Verify file permissions and user configuration
-4. **Port conflicts**: Change the port mapping in Docker commands
-
-### Debug Mode
-
-Enable debug logging:
+### Local Development
 
 ```bash
-# Set environment variable
-export RUST_LOG=debug
+# Clone with submodules
+git clone --recurse-submodules https://github.com/your-repo/mcp-server-as-http-node.git
 
-# Or in .env file
-RUST_LOG=debug
+# Update submodules
+git submodule update --init --recursive
+
+# Build
+cargo build --release
+
+# Run
+cargo run
 ```
 
-## Repository Strategy
+### Submodule Management
 
-### Current Repository (`mcp-server-as-http`)
+```bash
+# Update core library
+git submodule update --remote core
 
-This repository serves as:
-- **Proof of Concept**: Demonstrates HTTP-to-MCP protocol conversion
-- **General Purpose Tool**: Works with any MCP server accessible via `npx`
-- **Development Base**: Foundation for specialized implementations
-
-### Planned Specialized Repositories
-
-For production use, we're developing language-specific repositories with optimized Docker images:
-
-#### 1. `mcp-server-as-http-node` (Node.js/TypeScript)
-- **Base Image**: `node:18-alpine`
-- **Features**: 
-  - Direct GitHub repository cloning and building
-  - Optimized for npm/yarn-based MCP servers
-  - TypeScript compilation support
-  - Node.js-specific optimizations
-- **Use Cases**: Most MCP servers from @modelcontextprotocol org
-
-#### 2. `mcp-server-as-http-python` (Python)
-- **Base Image**: `python:3.11-alpine`
-- **Features**:
-  - Poetry/pip dependency management
-  - Python virtual environment isolation
-  - Support for Python-based MCP servers
-  - Optimized Python runtime
-- **Use Cases**: Python-based MCP servers and custom implementations
-
-#### 3. `mcp-server-as-http-docker` (Docker-in-Docker)
-- **Base Image**: `docker:dind`
-- **Features**:
-  - Run MCP servers that require Docker
-  - Full containerization support
-  - Multi-service orchestration
-  - Advanced networking capabilities
-- **Use Cases**: Complex MCP servers requiring isolated environments
-
-### Migration Strategy
-
-1. **Current Phase**: Use this repository for development and testing
-2. **Production Phase**: Migrate to appropriate specialized repository
-3. **Configuration**: Same JSON configuration format across all repositories
-4. **API Compatibility**: Identical REST API interface
-
-### Benefits of Repository Separation
-
-- **Optimized Images**: Smaller, faster Docker images with only necessary dependencies
-- **Better Performance**: Language-specific optimizations and caching
-- **Simplified Maintenance**: Focused codebase per language ecosystem
-- **Security**: Minimal attack surface with language-specific base images
-- **CI/CD Efficiency**: Faster builds and testing cycles
-
-### Configuration Compatibility
-
-All repositories will support the same configuration format:
-
-```json
-{
-  "server-name": {
-    "repository": "https://github.com/org/mcp-server",
-    "build_command": "npm install && npm run build",
-    "command": "node",
-    "args": ["dist/index.js"],
-    "env": {
-      "CUSTOM_VAR": "value"
-    }
-  }
-}
+# Pull latest changes
+git submodule foreach git pull origin main
 ```
 
-## License
+## 🔗 Related Projects
+
+- **[mcp-server-as-http-core](https://github.com/yonaka15/mcp-server-as-http-core)**: Core library
+- **mcp-server-as-http-python**: Python runtime (planned)
+- **mcp-server-as-http-docker**: Docker-in-Docker runtime (planned)
+
+## 📄 License
 
 This project is open source. Please refer to the LICENSE file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Update submodules if needed
+4. Write tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
+
+---
+
+**Note**: This implementation uses `mcp-server-as-http-core` as a git submodule. Make sure to initialize submodules when cloning.

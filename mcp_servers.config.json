@@ -3,10 +3,26 @@
     "repository": "https://github.com/yonaka15/mcp-server-redmine",
     "build_command": "npm install && npm run build",
     "command": "node",
-    "args": ["dist/index.js"]
+    "args": ["dist/index.js"],
+    "env": {
+      "REDMINE_URL": "https://your-redmine.example.com",
+      "REDMINE_API_KEY": "your-api-key"
+    }
   },
-  "brave-search": {
+  "github": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token"
+    }
+  },
+  "typescript-example": {
+    "repository": "https://github.com/user/typescript-mcp-server",
+    "build_command": "npm install && npm run build",
+    "command": "node",
+    "args": ["dist/index.js"],
+    "env": {
+      "API_KEY": "your-api-key"
+    }
   }
 }

@@ -1,3 +1,37 @@
-/target
+# Rust
+/target/
+Cargo.lock
+
+# Environment
 .env
+.env.local
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
 .DS_Store
+
+# Logs
+*.log
+
+# MCP Server temporary files
+/tmp/
+/mcp-servers/
+
+# npm/Node.js (for containerized builds)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Core library (managed as submodule)
+# Don't ignore the submodule itself, but ignore any local changes
+/core/*
+!/core/.git*

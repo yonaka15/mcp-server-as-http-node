@@ -1,10 +1,13 @@
 [package]
-name = "mcp-http-server"
+name = "mcp-http-server-node"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-axum = "0.8.4"
+# Core library as path dependency (from submodule)
+mcp-server-as-http-core = { path = "./core" }
+
+# Node.js runtime specific dependencies
+tokio = { version = "1.45.1", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.45.1", features = ["full"] }

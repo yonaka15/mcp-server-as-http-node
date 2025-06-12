@@ -1,22 +1,53 @@
+version: '3.8'
+
 services:
-  mcp-server-as-http:
+  mcp-http-server-node:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: mcp-http-server-node
     ports:
-      - ${PORT}:3000
+      - "${PORT:-3000}:3000"
     environment:
-      # Override default environment variables here
-      - HTTP_API_KEY=${HTTP_API_KEY:-your-secret-api-key-here}
-      - DISABLE_AUTH=${DISABLE_AUTH:-false}
+      # Core Configuration
       - MCP_CONFIG_FILE=mcp_servers.config.json
       - MCP_SERVER_NAME=${MCP_SERVER_NAME:-redmine}
+      - PORT=${PORT:-3000}
+      - HOST=0.0.0.0
+      
+      # Authentication
+      - HTTP_API_KEY=${HTTP_API_KEY}
+      - DISABLE_AUTH=${DISABLE_AUTH:-false}
+      
+      # Node.js Runtime Configuration
+      - NODE_PACKAGE_MANAGER=${NODE_PACKAGE_MANAGER:-npm}
+      - ENABLE_TYPESCRIPT=${ENABLE_TYPESCRIPT:-true}
+      - AUTO_INSTALL_DEPS=${AUTO_INSTALL_DEPS:-true}
+      - WORK_DIR=/tmp/mcp-servers
+      
+      # Logging
       - RUST_LOG=${RUST_LOG:-info}
-      - REDMINE_HOST=${REDMINE_HOST}
+      
+      # MCP Server Environment Variables (pass through)
+      - REDMINE_URL=${REDMINE_URL}
       - REDMINE_API_KEY=${REDMINE_API_KEY}
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}
+    
     volumes:
-      # Mount config file for easy development changes
-      - ./mcp_servers.config.json:/app/mcp_servers.config.json:ro
-      # Optional: mount custom .env file
-      - ./.env:/app/.env:ro
+      - mcp_cache:/tmp/mcp-servers
+      - npm_cache:/app/.npm-cache
+    
     restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1", "-X", "POST", "-H", "Content-Type: application/json", "-d", '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mcp_cache:
+    driver: local
+  npm_cache:
+    driver: local
