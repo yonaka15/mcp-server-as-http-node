@@ -1,12 +1,14 @@
-# Rust
-/target/
-Cargo.lock
-
-# Environment
+# Environment files
 .env
 .env.local
 
-# Docker
+# Backup files (from migration)
+*.backup
+src.backup/
+target.backup/
+core.backup/
+
+# Docker build artifacts
 .dockerignore
 
 # IDE
@@ -25,13 +27,13 @@ Cargo.lock
 /tmp/
 /mcp-servers/
 
-# npm/Node.js (for containerized builds)
+# npm/Node.js (for development/testing if needed)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Core library (managed as submodule)
-# Don't ignore the submodule itself, but ignore any local changes
-/core/*
-!/core/.git*
+# Docker volumes (if mounted locally)
+volumes/
+data/
+cache/

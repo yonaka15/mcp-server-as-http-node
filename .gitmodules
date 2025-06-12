@@ -1,3 +1,0 @@
-[submodule "core"]
-	path = core
-	url = https://github.com/yonaka15/mcp-server-as-http-core.git

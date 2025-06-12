@@ -1,86 +1,105 @@
-# Multi-stage Docker build for MCP HTTP Server (Node.js Runtime)
-# Optimized for Node.js/TypeScript MCP servers
+# MCP HTTP Server (Node.js Runtime) - Multi-platform Docker Build
+# Automatically detects platform and builds appropriate binary
 
-# Stage 1: Build stage with Rust and Node.js
-FROM rust:1.85-slim-bookworm as builder
+# Stage 1: Platform-aware Rust builder
+FROM --platform=${BUILDPLATFORM} rust:1.85-alpine AS rust-builder
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    curl \
+# Install build dependencies
+RUN apk add --no-cache \
+    musl-dev \
+    openssl-dev \
+    openssl-libs-static \
     git \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    pkgconfig
 
-WORKDIR /app
+# Build arguments for cross-compilation
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
-# Copy project files including git submodules
-COPY . .
+# Set target based on platform
+RUN case "${TARGETPLATFORM}" in \
+      "linux/amd64") \
+        echo "x86_64-unknown-linux-musl" > /target.txt && \
+        rustup target add x86_64-unknown-linux-musl \
+        ;; \
+      "linux/arm64") \
+        echo "aarch64-unknown-linux-musl" > /target.txt && \
+        rustup target add aarch64-unknown-linux-musl \
+        ;; \
+      *) \
+        echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 \
+        ;; \
+    esac
 
-# Initialize git submodules
-RUN git submodule update --init --recursive || echo "No submodules or git not available"
+# Set environment for static linking
+ENV RUSTFLAGS="-C target-feature=+crt-static" \
+    PKG_CONFIG_ALL_STATIC=1 \
+    PKG_CONFIG_ALL_DYNAMIC=0
 
-# Build dependencies first (for caching)
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir -p src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src target/release/deps/mcp_http_server_node*
+WORKDIR /build
 
-# Build the actual application
-COPY src ./src
-RUN cargo build --release
+# Clone the repository
+RUN git clone https://github.com/yonaka15/mcp-server-as-http-core.git .
 
-# Stage 2: Runtime stage optimized for Node.js
-FROM node:18-slim
+# Build for the target platform
+RUN RUST_TARGET=$(cat /target.txt) && \
+    cargo build \
+    --release \
+    --target ${RUST_TARGET} \
+    --config 'profile.release.lto = true' \
+    --config 'profile.release.codegen-units = 1' \
+    --config 'profile.release.panic = "abort"' \
+    --config 'profile.release.strip = true' && \
+    cp target/${RUST_TARGET}/release/mcp-server-as-http-core /mcp-http-server
+
+# Stage 2: Runtime (Alpine Node.js)
+FROM node:18-alpine
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
+RUN apk add --no-cache \
     curl \
     git \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
 
 # Create non-root user
-RUN groupadd -r mcpuser && useradd -r -g mcpuser mcpuser
+RUN addgroup -g 1001 -S mcpuser && \
+    adduser -S mcpuser -u 1001 -G mcpuser
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/target/release/mcp-http-server-node ./mcp-http-server
+# Copy the binary from builder
+COPY --from=rust-builder /mcp-http-server ./mcp-http-server
+
+# Make executable and verify
+RUN chmod +x ./mcp-http-server && \
+    ./mcp-http-server --version || echo "Binary ready"
 
 # Copy configuration files
 COPY mcp_servers.config.json .env.example ./
 
-# Setup npm cache and config directories
+# Setup directories
 RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
     chown -R mcpuser:mcpuser /app /tmp/mcp-servers
 
 # Switch to non-root user
 USER mcpuser
 
-# Configure npm to use app-local directories
-ENV NPM_CONFIG_CACHE=/app/.npm-cache
-ENV XDG_CONFIG_HOME=/app/.npm-config
+# Environment configuration
+ENV NPM_CONFIG_CACHE=/app/.npm-cache \
+    XDG_CONFIG_HOME=/app/.npm-config \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false \
+    MCP_CONFIG_FILE=mcp_servers.config.json \
+    MCP_SERVER_NAME=brave-search \
+    MCP_RUNTIME_TYPE=node \
+    NODE_PACKAGE_MANAGER=npm \
+    WORK_DIR=/tmp/mcp-servers \
+    RUST_LOG=info
 
-# Expose port
 EXPOSE 3000
 
-# Environment variables for Node.js optimization
-ENV MCP_CONFIG_FILE=mcp_servers.config.json
-ENV MCP_SERVER_NAME=redmine
-ENV NODE_PACKAGE_MANAGER=npm
-ENV ENABLE_TYPESCRIPT=true
-ENV AUTO_INSTALL_DEPS=true
-ENV WORK_DIR=/tmp/mcp-servers
-ENV RUST_LOG=info
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/v1 -X POST \
-        -H "Content-Type: application/json" \
-        -d '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}' || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
-# Run the application
 CMD ["./mcp-http-server"]

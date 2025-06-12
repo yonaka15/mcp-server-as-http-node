@@ -1,30 +1,33 @@
-# Ignore build artifacts
-/target
-**/*.rs.bk
-**/*.pdb
+# === Archive and Backup Files ===
+archive/
+*.backup
+*.removed
 
-# Ignore environment files
+# === Environment and Secrets ===
 .env
 .env.local
 .env.*.local
 
-# Ignore git
-.git
+# === Git and Version Control ===
+.git/
 .gitignore
+.gitmodules*
 
-# Ignore documentation
-README.md
+# === Documentation (except essential) ===
 docs/
+CHANGELOG.md
+MIGRATION_SUMMARY.md
 *.md
+!README.md
 
-# Ignore IDE and editor files
+# === IDE and Editor Files ===
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Ignore OS files
+# === OS Files ===
 .DS_Store
 .DS_Store?
 ._*
@@ -33,17 +36,31 @@ docs/
 ehthumbs.db
 Thumbs.db
 
-# Ignore Docker files (to avoid recursive copying)
-Dockerfile*
+# === Docker Files (avoid recursion) ===
+Dockerfile.*
 docker-compose*.yml
 .dockerignore
 
-# Ignore temporary files
+# === Temporary and Log Files ===
 *.tmp
 *.temp
 *.log
+logs/
 
-# Ignore test files
+# === Node.js Development Files ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === Test and Development ===
 tests/
 test/
-*_test.rs
+__tests__/
+coverage/
+test.sh
+
+# === Build and Cache Directories ===
+dist/
+build/
+cache/

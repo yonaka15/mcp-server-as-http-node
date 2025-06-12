@@ -4,14 +4,16 @@ services:
   mcp-http-server-node:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ${DOCKERFILE:-Dockerfile}  # Default or override with env var
+      target: ${BUILD_TARGET:-}              # Optional build target
     container_name: mcp-http-server-node
     ports:
       - "${PORT:-3000}:3000"
     environment:
       # Core Configuration
       - MCP_CONFIG_FILE=mcp_servers.config.json
-      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-redmine}
+      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-brave-search}
+      - MCP_RUNTIME_TYPE=node
       - PORT=${PORT:-3000}
       - HOST=0.0.0.0
       
@@ -21,30 +23,68 @@ services:
       
       # Node.js Runtime Configuration
       - NODE_PACKAGE_MANAGER=${NODE_PACKAGE_MANAGER:-npm}
-      - ENABLE_TYPESCRIPT=${ENABLE_TYPESCRIPT:-true}
-      - AUTO_INSTALL_DEPS=${AUTO_INSTALL_DEPS:-true}
       - WORK_DIR=/tmp/mcp-servers
       
       # Logging
       - RUST_LOG=${RUST_LOG:-info}
       
-      # MCP Server Environment Variables (pass through)
+      # MCP Server Environment Variables
       - REDMINE_URL=${REDMINE_URL}
       - REDMINE_API_KEY=${REDMINE_API_KEY}
+      - REDMINE_HOST=${REDMINE_HOST}
       - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
     
     volumes:
-      - mcp_cache:/tmp/mcp-servers
-      - npm_cache:/app/.npm-cache
+      - mcp_cache:/tmp/mcp-servers:rw
+      - npm_cache:/app/.npm-cache:rw
     
     restart: unless-stopped
     
+    # Lightweight health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1", "-X", "POST", "-H", "Content-Type: application/json", "-d", '{"command": "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/list\", \"params\": {}}"}']
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+    
+    # Resource limits for efficiency
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Alternative ultra-lightweight service
+  mcp-http-server-distroless:
+    build:
+      context: .
+      dockerfile: Dockerfile.distroless
+    container_name: mcp-http-server-distroless
+    ports:
+      - "${PORT:-3001}:3000"
+    environment:
+      - MCP_CONFIG_FILE=mcp_servers.config.json
+      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-brave-search}
+      - MCP_RUNTIME_TYPE=node
+      - RUST_LOG=${RUST_LOG:-info}
+      - HTTP_API_KEY=${HTTP_API_KEY}
+      - DISABLE_AUTH=${DISABLE_AUTH:-false}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+    volumes:
+      - mcp_cache:/tmp/mcp-servers:rw
+    restart: unless-stopped
+    profiles:
+      - distroless  # Only start when explicitly requested
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
 
 volumes:
   mcp_cache:
