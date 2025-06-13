@@ -6,107 +6,10 @@
       "build_command": "npm install && npm run build",
       "command": "node",
       "args": ["dist/index.js"],
-      "env": {
-        "REDMINE_URL": "https://your-redmine.example.com",
-        "REDMINE_API_KEY": "your-api-key"
-      },
       "runtime_config": {
         "node": {
           "version": ">=18.0.0",
           "package_manager": "npm"
-        }
-      }
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token"
-      },
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0"
-        }
-      }
-    },
-    "brave-search": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-      "env": {
-        "BRAVE_API_KEY": "your-brave-api-key"
-      },
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0"
-        }
-      }
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/mcp-servers"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0"
-        }
-      }
-    },
-    "typescript-example": {
-      "repository": "https://github.com/user/typescript-mcp-server",
-      "build_command": "npm install && npm run build",
-      "command": "node",
-      "args": ["dist/index.js"],
-      "env": {
-        "API_KEY": "your-api-key",
-        "NODE_ENV": "production"
-      },
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "npm"
-        },
-        "typescript": {
-          "enabled": true,
-          "config": "tsconfig.json"
-        }
-      }
-    },
-    "express-mcp-server": {
-      "repository": "https://github.com/user/express-mcp-server",
-      "build_command": "npm ci && npm run build",
-      "command": "npm",
-      "args": ["run", "start"],
-      "env": {
-        "PORT": "3001",
-        "NODE_ENV": "production"
-      },
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "npm"
-        }
-      }
-    },
-    "yarn-based-server": {
-      "repository": "https://github.com/user/yarn-mcp-server",
-      "build_command": "yarn install && yarn build",
-      "command": "yarn",
-      "args": ["start"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "yarn"
-        }
-      }
-    },
-    "pnpm-server": {
-      "repository": "https://github.com/user/pnpm-mcp-server", 
-      "build_command": "pnpm install && pnpm build",
-      "command": "pnpm",
-      "args": ["start"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "pnpm"
         }
       }
     }

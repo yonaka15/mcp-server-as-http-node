@@ -9,11 +9,12 @@ services:
     container_name: mcp-http-server-node
     ports:
       - "${PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
       # Core Configuration
       - MCP_CONFIG_FILE=mcp_servers.config.json
-      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-brave-search}
-      - MCP_RUNTIME_TYPE=node
+      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-redmine}
       - PORT=${PORT:-3000}
       - HOST=0.0.0.0
       
@@ -32,8 +33,6 @@ services:
       - REDMINE_URL=${REDMINE_URL}
       - REDMINE_API_KEY=${REDMINE_API_KEY}
       - REDMINE_HOST=${REDMINE_HOST}
-      - GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}
-      - BRAVE_API_KEY=${BRAVE_API_KEY}
     
     volumes:
       - mcp_cache:/tmp/mcp-servers:rw
@@ -58,33 +57,6 @@ services:
         reservations:
           memory: 256M
           cpus: '0.1'
-
-  # Alternative ultra-lightweight service
-  mcp-http-server-distroless:
-    build:
-      context: .
-      dockerfile: Dockerfile.distroless
-    container_name: mcp-http-server-distroless
-    ports:
-      - "${PORT:-3001}:3000"
-    environment:
-      - MCP_CONFIG_FILE=mcp_servers.config.json
-      - MCP_SERVER_NAME=${MCP_SERVER_NAME:-brave-search}
-      - MCP_RUNTIME_TYPE=node
-      - RUST_LOG=${RUST_LOG:-info}
-      - HTTP_API_KEY=${HTTP_API_KEY}
-      - DISABLE_AUTH=${DISABLE_AUTH:-false}
-      - BRAVE_API_KEY=${BRAVE_API_KEY}
-    volumes:
-      - mcp_cache:/tmp/mcp-servers:rw
-    restart: unless-stopped
-    profiles:
-      - distroless  # Only start when explicitly requested
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.3'
 
 volumes:
   mcp_cache:
