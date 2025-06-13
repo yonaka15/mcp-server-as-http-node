@@ -91,7 +91,6 @@ docker run -d \
 |----------|---------|-------------|
 | `MCP_CONFIG_FILE` | `mcp_servers.config.json` | Path to MCP servers configuration |
 | `MCP_SERVER_NAME` | `redmine` | Server name to use from config |
-| `MCP_RUNTIME_TYPE` | `node` | Runtime type (fixed for this image) |
 | `PORT` | `3000` | HTTP server port |
 | `HTTP_API_KEY` | - | Bearer token for authentication |
 | `DISABLE_AUTH` | `false` | Disable authentication |
@@ -113,9 +112,35 @@ Create or update `mcp_servers.config.json`:
       "build_command": "npm install && npm run build",
       "command": "node",
       "args": ["dist/index.js"],
-      "env": {
-        "REDMINE_URL": "https://your-redmine.example.com",
-        "REDMINE_API_KEY": "your-api-key"
+      "runtime_config": {
+        "node": {
+          "version": ">=18.0.0",
+          "package_manager": "npm"
+        }
+      }
+    }
+  }
+}
+```
+
+### Additional Server Examples
+
+If you want to add more servers, here are some examples:
+
+```json
+{
+  "version": "1.0",
+  "servers": {
+    "redmine": {
+      "repository": "https://github.com/yonaka15/mcp-server-redmine",
+      "build_command": "npm install && npm run build",
+      "command": "node",
+      "args": ["dist/index.js"],
+      "runtime_config": {
+        "node": {
+          "version": ">=18.0.0",
+          "package_manager": "npm"
+        }
       }
     },
     "github": {
@@ -123,18 +148,6 @@ Create or update `mcp_servers.config.json`:
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token"
-      }
-    },
-    "typescript-example": {
-      "repository": "https://github.com/user/typescript-mcp-server",
-      "build_command": "npm install && npm run build",
-      "command": "node", 
-      "args": ["dist/index.js"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "npm"
-        }
       }
     },
     "brave-search": {
