@@ -12,6 +12,18 @@
           "package_manager": "npm"
         }
       }
+    },
+    "context7": {
+      "repository": "https://github.com/quiint/c7-mcp-server",
+      "build_command": "npm install && npm run build",
+      "command": "node",
+      "args": ["build/index.js"],
+      "runtime_config": {
+        "node": {
+          "version": ">=18.0.0",
+          "package_manager": "npm"
+        }
+      }
     }
   }
 }
