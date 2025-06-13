@@ -91,15 +91,18 @@ ENV NPM_CONFIG_CACHE=/app/.npm-cache \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false \
     MCP_CONFIG_FILE=mcp_servers.config.json \
-    MCP_SERVER_NAME=context7 \
+    MCP_SERVER_NAME=redmine \
     MCP_RUNTIME_TYPE=node \
     NODE_PACKAGE_MANAGER=npm \
     WORK_DIR=/tmp/mcp-servers \
+    PORT=3000 \
     RUST_LOG=info
 
-EXPOSE 3000
+# Default port - can be overridden by environment variable
+EXPOSE ${PORT:-3000}
 
+# Dynamic health check using PORT environment variable
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 CMD ["./mcp-http-server"]

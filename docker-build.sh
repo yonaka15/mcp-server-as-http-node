@@ -56,7 +56,7 @@ fi
 IMAGE_NAME="mcp-http-server-node"
 TAG="latest"
 PORT="3000"
-DOCKERFILE="Dockerfile.native"  # Default to native build
+DOCKERFILE="Dockerfile"  # Default to main Dockerfile
 FALLBACK_TO_SIMPLE=false
 
 # Parse arguments
@@ -346,7 +346,7 @@ fi
 
 if [[ "${BUILD_ONLY}" == "true" ]]; then
     print_status "Build completed. Run with:"
-    echo "docker run -d --name ${IMAGE_NAME} -p ${PORT}:3000 --env-file .env ${IMAGE_NAME}:${TAG}"
+    echo "docker run -d --name ${IMAGE_NAME} -p ${PORT}:\${PORT} --env-file .env ${IMAGE_NAME}:${TAG}"
     exit 0
 fi
 
@@ -358,9 +358,22 @@ if docker ps -a --format 'table {{.Names}}' | grep -q "^${IMAGE_NAME}$"; then
 fi
 
 print_status "Starting container on port ${PORT}..."
+
+# Read PORT from .env file if it exists
+if [[ -f .env ]]; then
+    ENV_PORT=$(grep "^PORT=" .env | cut -d'=' -f2)
+    if [[ -n "$ENV_PORT" ]]; then
+        CONTAINER_PORT="$ENV_PORT"
+    else
+        CONTAINER_PORT="${PORT}"
+    fi
+else
+    CONTAINER_PORT="${PORT}"
+fi
+
 docker run -d \
     --name "${IMAGE_NAME}" \
-    -p "${PORT}:3000" \
+    -p "${PORT}:${CONTAINER_PORT}" \
     --env-file .env \
     -v mcp_cache:/tmp/mcp-servers \
     -v npm_cache:/app/.npm-cache \
