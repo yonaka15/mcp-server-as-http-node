@@ -29,11 +29,6 @@ services:
       # Logging
       - RUST_LOG=${RUST_LOG:-info}
 
-      # MCP Server Environment Variables
-      - REDMINE_URL=${REDMINE_URL}
-      - REDMINE_API_KEY=${REDMINE_API_KEY}
-      - REDMINE_HOST=${REDMINE_HOST}
-
     volumes:
       - mcp_cache:/tmp/mcp-servers:rw
       - npm_cache:/app/.npm-cache:rw
