@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: ${DOCKERFILE:-Dockerfile} # Default or override with env var
       target: ${BUILD_TARGET:-} # Optional build target
-    container_name: mcp-http-server-node
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     env_file:

@@ -79,7 +79,7 @@ RUN chmod +x ./mcp-http-server && \
 EXPOSE ${PORT:-3000}
 
 # Copy configuration files
-COPY ${MCP_CONFIG_FILE:-mcp_servers.config.json} ./
+COPY *.config.json ./
 
 # Setup directories
 RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
