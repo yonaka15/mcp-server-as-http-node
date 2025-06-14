@@ -38,12 +38,8 @@ ENV RUSTFLAGS="-C target-feature=+crt-static" \
 
 WORKDIR /build
 
-
 # Clone the repository
 RUN git clone https://github.com/yonaka15/mcp-server-as-http-core.git .
-
-# Copy MCP servers configuration file
-COPY ${MCP_CONFIG_FILE:-mcp_servers.config.json} ./
 
 # Build for the target platform
 RUN RUST_TARGET=$(cat /target.txt) && \
@@ -79,6 +75,9 @@ COPY --from=rust-builder /mcp-http-server ./mcp-http-server
 RUN chmod +x ./mcp-http-server && \
   ./mcp-http-server --version || echo "Binary ready"
 
+# Default port - can be overridden by environment variable
+EXPOSE ${PORT:-3000}
+
 # Copy configuration files
 COPY ${MCP_CONFIG_FILE:-mcp_servers.config.json} ./
 
@@ -88,25 +87,5 @@ RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
 
 # Switch to non-root user
 USER mcpuser
-
-# Environment configuration
-ENV NPM_CONFIG_CACHE=/app/.npm-cache \
-  XDG_CONFIG_HOME=/app/.npm-config \
-  NPM_CONFIG_UPDATE_NOTIFIER=false \
-  NPM_CONFIG_FUND=false \
-  MCP_CONFIG_FILE=mcp_servers.config.json \
-  MCP_SERVER_NAME=redmine \
-  MCP_RUNTIME_TYPE=node \
-  NODE_PACKAGE_MANAGER=npm \
-  WORK_DIR=/tmp/mcp-servers \
-  PORT=3000 \
-  RUST_LOG=info
-
-# Default port - can be overridden by environment variable
-EXPOSE ${PORT:-3000}
-
-# Dynamic health check using PORT environment variable
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 CMD ["./mcp-http-server"]
