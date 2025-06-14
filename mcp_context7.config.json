@@ -1,8 +1,8 @@
 {
   "version": "1.0",
   "servers": {
-    "redmine": {
-      "repository": "https://github.com/yonaka15/mcp-server-redmine",
+    "context7": {
+      "repository": "https://github.com/upstash/context7.git",
       "build_command": "npm install && npm run build",
       "command": "node",
       "args": ["dist/index.js"]

@@ -39,7 +39,7 @@ ENV RUSTFLAGS="-C target-feature=+crt-static" \
 WORKDIR /build
 
 # Clone the repository
-RUN git clone https://github.com/yonaka15/mcp-server-as-http-core.git .
+RUN git clone --branch v0.1.0 https://github.com/yonaka15/mcp-server-as-http-core.git .
 
 # Build for the target platform
 RUN RUST_TARGET=$(cat /target.txt) && \
