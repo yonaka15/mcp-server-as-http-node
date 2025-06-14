@@ -101,6 +101,8 @@ docker run -d \
 
 ### Node.js MCP Server Configuration
 
+**Important**: Configuration files must follow the `*.config.json` naming convention. These files are automatically copied into the Docker container during the build process.
+
 Create or update `mcp_servers.config.json`:
 
 ```json
