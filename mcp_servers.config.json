@@ -5,25 +5,13 @@
       "repository": "https://github.com/yonaka15/mcp-server-redmine",
       "build_command": "npm install && npm run build",
       "command": "node",
-      "args": ["dist/index.js"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "npm"
-        }
-      }
+      "args": ["dist/index.js"]
     },
     "context7": {
-      "repository": "https://github.com/quiint/c7-mcp-server",
+      "repository": "https://github.com/upstash/context7.git",
       "build_command": "npm install && npm run build",
       "command": "node",
-      "args": ["build/index.js"],
-      "runtime_config": {
-        "node": {
-          "version": ">=18.0.0",
-          "package_manager": "npm"
-        }
-      }
+      "args": ["dist/index.js"]
     }
   }
 }
