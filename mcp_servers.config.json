@@ -1,11 +1,17 @@
 {
   "version": "1.0",
   "servers": {
-    "redmine": {
-      "repository": "https://github.com/yonaka15/mcp-server-redmine",
-      "build_command": "npm install && npm run build",
-      "command": "node",
-      "args": ["dist/index.js"]
+    "google-sheets": {
+      "repository": "https://github.com/xing5/mcp-google-sheets.git",
+      "build_command": "uv sync",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/tmp/mcp-servers/google-sheets",
+        "python",
+        "src/mcp_google_sheets/server.py"
+      ]
     }
   }
 }

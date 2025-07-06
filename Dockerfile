@@ -1,4 +1,4 @@
-# MCP HTTP Server (Node.js Runtime) - Multi-platform Docker Build
+# MCP HTTP Server (Node.js Runtime) - Multi-platform Docker Build with uv
 # Automatically detects platform and builds appropriate binary
 
 # Stage 1: Platform-aware Rust builder
@@ -52,19 +52,30 @@ RUN RUST_TARGET=$(cat /target.txt) && \
   --config 'profile.release.strip = true' && \
   cp target/${RUST_TARGET}/release/mcp-server-as-http-core /mcp-http-server
 
-# Stage 2: Runtime (Alpine Node.js)
-FROM node:18-alpine
+# Stage 2: Runtime (Python with Node.js and uv)
+FROM python:latest
 
-# Install runtime dependencies
-RUN apk add --no-cache \
+# Install Node.js 18 and other system dependencies
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
+  nodejs \
   curl \
   git \
   ca-certificates \
-  && rm -rf /var/cache/apk/*
+  build-essential \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN addgroup -g 1001 -S mcpuser && \
-  adduser -S mcpuser -u 1001 -G mcpuser
+# Install uv by copying from official image (most reliable method)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Verify installations
+RUN python --version && node --version && npm --version && uv --version
+
+# Create non-root user (Debian syntax)
+RUN groupadd -g 1001 mcpuser && \
+  useradd -r -u 1001 -g mcpuser -d /home/mcpuser -m mcpuser
 
 WORKDIR /app
 
@@ -82,10 +93,13 @@ EXPOSE ${PORT:-3000}
 COPY *.config.json ./
 
 # Setup directories
-RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers && \
+RUN mkdir -p /app/.npm-cache /app/.npm-config /tmp/mcp-servers /app/python-env && \
   chown -R mcpuser:mcpuser /app /tmp/mcp-servers
 
 # Switch to non-root user
 USER mcpuser
+
+# Verify uv installation
+RUN uv --version
 
 CMD ["./mcp-http-server"]
